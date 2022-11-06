@@ -46,6 +46,42 @@ class GithubServiceTest extends TestCase
         self::assertSame($expectedStatus, $service->getHealthReport($dinoName));
     }
 
+    public function testExceptionThrownWithUnknownLabel(): void
+    {
+        $mockLogger = $this->createMock(LoggerInterface::class);
+        $mockHttpClient = $this->createMock(HttpClientInterface::class);
+        $mockResponse = $this->createMock(ResponseInterface::class);
+
+        $mockResponse
+            ->method('toArray')
+            ->willReturn([
+                    [
+                        'title' => 'Maverick',
+                        'labels' => [['name' => 'Status: Drowsy']],
+                    ],
+                ]);
+
+
+        $mockHttpClient
+            ->expects(self::once())
+            ->method('request')
+            ->with('GET', 'https://api.github.com/repos/SymfonyCasts/dino-park/issues')
+            ->willReturn($mockResponse);
+
+
+        $service = new GithubService(logger: $mockLogger, httpClient: $mockHttpClient);
+
+        /**
+         * All of these expect methods are just like the assert methods.
+         * The big difference is that they must be called before the action you're testing rather than after
+         */
+        $this->expectException(\RuntimeException::class);
+
+        $this->expectExceptionMessage('Drowsy is an unknown status label!');
+
+        $service->getHealthReport('Maverick');
+    }
+
 
     public function dinoNameProvider(): \Generator
     {
