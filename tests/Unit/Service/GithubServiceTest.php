@@ -6,6 +6,8 @@ use App\Enum\HealthStatus;
 use App\Service\GithubService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -16,60 +18,38 @@ class GithubServiceTest extends TestCase
      */
     public function testGetHealthReportReturnsCorrectHealthStatusForDino(HealthStatus $expectedStatus, string $dinoName): void
     {
-        $mockLogger = $this->createMock(LoggerInterface::class);
         $mockHttpClient = $this->createMock(HttpClientInterface::class);
-        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse = new MockResponse(json_encode([
+            [
+                'title' => 'Daisy',
+                'labels' => [['name' => 'Status: Sick']],
+            ],
+            [
+                'title' => 'Maverick',
+                'labels' => [['name' => 'Status: Healthy']],
+            ],
+        ]));
 
-        $mockResponse
-            ->method('toArray')
-            ->willReturn([
-                    [
-                        'title' => 'Daisy',
-                        'labels' => [['name' => 'Status: Sick']],
-                    ],
-                    [
-                        'title' => 'Maverick',
-                        'labels' => [['name' => 'Status: Healthy']],
-                    ],
-                ]);
+        $mockHttpClient = new MockHttpClient($mockResponse);
 
-
-        $mockHttpClient
-            ->expects(self::once())
-            ->method('request')
-            ->with('GET', 'https://api.github.com/repos/SymfonyCasts/dino-park/issues')
-            ->willReturn($mockResponse);
-
-
-        $service = new GithubService(logger: $mockLogger, httpClient: $mockHttpClient);
+        $service = new GithubService(logger: $this->createMock(LoggerInterface::class), httpClient: $mockHttpClient);
 
         self::assertSame($expectedStatus, $service->getHealthReport($dinoName));
     }
 
     public function testExceptionThrownWithUnknownLabel(): void
     {
-        $mockLogger = $this->createMock(LoggerInterface::class);
         $mockHttpClient = $this->createMock(HttpClientInterface::class);
-        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse = new MockResponse(json_encode(
+            [
+                'title' => 'Maverick',
+                'labels' => [['name' => 'Status: Drowsy']],
+            ],
+        ));
 
-        $mockResponse
-            ->method('toArray')
-            ->willReturn([
-                    [
-                        'title' => 'Maverick',
-                        'labels' => [['name' => 'Status: Drowsy']],
-                    ],
-                ]);
+        $mockHttpClient = new MockHttpClient($mockResponse);
 
-
-        $mockHttpClient
-            ->expects(self::once())
-            ->method('request')
-            ->with('GET', 'https://api.github.com/repos/SymfonyCasts/dino-park/issues')
-            ->willReturn($mockResponse);
-
-
-        $service = new GithubService(logger: $mockLogger, httpClient: $mockHttpClient);
+        $service = new GithubService(logger: $this->createMock(LoggerInterface::class), httpClient: $mockHttpClient);
 
         /**
          * All of these expect methods are just like the assert methods.
