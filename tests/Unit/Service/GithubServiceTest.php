@@ -8,18 +8,25 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class GithubServiceTest extends TestCase
 {
+    private LoggerInterface $mockLogger;
+    private MockHttpClient $mockHttpClient;
+    private MockResponse $mockResponse;
+
+    protected function setUp(): void
+    {
+        $this->mockLogger = $this->createMock(LoggerInterface::class);
+        $this->mockHttpClient = new MockHttpClient();
+    }
+
     /**
      * @dataProvider dinoNameProvider
      */
     public function testGetHealthReportReturnsCorrectHealthStatusForDino(HealthStatus $expectedStatus, string $dinoName): void
     {
-        $mockHttpClient = $this->createMock(HttpClientInterface::class);
-        $mockResponse = new MockResponse(json_encode([
+        $service = $service = $this->createGithubService([
             [
                 'title' => 'Daisy',
                 'labels' => [['name' => 'Status: Sick']],
@@ -28,28 +35,25 @@ class GithubServiceTest extends TestCase
                 'title' => 'Maverick',
                 'labels' => [['name' => 'Status: Healthy']],
             ],
-        ]));
-
-        $mockHttpClient = new MockHttpClient($mockResponse);
-
-        $service = new GithubService(logger: $this->createMock(LoggerInterface::class), httpClient: $mockHttpClient);
+        ]);
 
         self::assertSame($expectedStatus, $service->getHealthReport($dinoName));
+        self::assertSame(1, $this->mockHttpClient->getRequestsCount());
+        self::assertSame('GET', $this->mockResponse->getRequestMethod());
+        self::assertSame(
+            'https://api.github.com/repos/SymfonyCasts/dino-park/issues',
+            $this->mockResponse->getRequestUrl()
+        );
     }
 
     public function testExceptionThrownWithUnknownLabel(): void
     {
-        $mockHttpClient = $this->createMock(HttpClientInterface::class);
-        $mockResponse = new MockResponse(json_encode(
+        $service = $this->createGithubService([
             [
                 'title' => 'Maverick',
                 'labels' => [['name' => 'Status: Drowsy']],
-            ],
-        ));
-
-        $mockHttpClient = new MockHttpClient($mockResponse);
-
-        $service = new GithubService(logger: $this->createMock(LoggerInterface::class), httpClient: $mockHttpClient);
+            ]
+        ]);
 
         /**
          * All of these expect methods are just like the assert methods.
@@ -74,5 +78,13 @@ class GithubServiceTest extends TestCase
             HealthStatus::HEALTHY,
             'Maverick',
         ];
+    }
+
+    private function createGithubService(array $responseData): GithubService
+    {
+        $this->mockResponse = new MockResponse(json_encode($responseData));
+        $this->mockHttpClient->setResponseFactory($this->mockResponse);
+
+        return new GithubService($this->mockHttpClient, $this->mockLogger);
     }
 }
